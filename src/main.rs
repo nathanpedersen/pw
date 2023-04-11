@@ -1,12 +1,29 @@
 use serde::{Deserialize, Serialize};
-use std::{fs::OpenOptions, io::{BufReader, BufWriter}, process::exit, env};
 use std::collections::HashMap;
+use std::{
+    env,
+    fs::OpenOptions,
+    io::{BufReader, BufWriter},
+    process::exit,
+};
 
 #[derive(Deserialize, Serialize, Debug)]
 struct Entry {
     title: String,
     user: String,
     pass: String,
+}
+
+enum Command {
+    Add {
+        title: String,
+        user: String,
+        pass: String,
+    },
+    Delete {
+        title: String,
+    },
+    List,
 }
 
 fn print_help_menu() {
@@ -99,6 +116,8 @@ fn delete_entry(title: &str) {
 fn list_entries() {
     let file = OpenOptions::new()
         .read(true)
+        .write(true)
+        .create(true)
         .open("pwd.json")
         .expect("list_entries: Failed to open pwd.json");
 
@@ -109,30 +128,63 @@ fn list_entries() {
         Err(_) => HashMap::new(),
     };
 
-    let pwd_map_to_string: String = match serde_json::to_string_pretty(&pwd_map) {
-        Ok(str) => str,
-        Err(_) => String::new(),
-    };
+    for kv in pwd_map {
+        println!("{}", kv.0);
+    }
 
-    println!("{}", pwd_map_to_string);
+}
+
+fn parse_args(args: &Vec<String>) -> Result<Command, ()> {
+    match args.as_slice() {
+        [_, flag, title, user, pass] => {
+            if flag == "-a" {
+                Ok(Command::Add {
+                    title: title.to_string(),
+                    user: user.to_string(),
+                    pass: pass.to_string(),
+                })
+            } else {
+                Err(())
+            }
+        }
+
+        [_, flag, title] => {
+            if flag == "-d" {
+                Ok(Command::Delete {
+                    title: title.to_string(),
+                })
+            } else {
+                Err(())
+            }
+        }
+
+        [_, flag] => {
+            if flag == "-l" {
+                Ok(Command::List)
+            } else {
+                Err(())
+            }
+        }
+        _ => Err(()),
+    }
 }
 
 fn main() {
-    let args: Vec<String> = env::args().skip(1).collect();
+    let args: Vec<String> = env::args().collect();
+    let command = parse_args(&args);
 
-    if args.len() > 0 {
-        if args[0].contains("-a") && args.len() == 4 {
-            add_entry(args[1].as_str(), args[2].as_str(), args[3].as_str());
-        } else if args[0].contains("-d") &&  args.len() == 2 {
-            delete_entry(args[1].as_str());
-        } else if args[0].contains("-l") && args.len() == 1 {
+    match command {
+        Ok(Command::Add { title, user, pass }) => {
+            add_entry(title.as_str(), user.as_str(), pass.as_str());
+        },
+        Ok(Command::Delete { title }) => {
+            delete_entry(title.as_str());
+        },
+        Ok(Command::List) => {
             list_entries();
-        } else {
+        },
+        Err(_) => {
             print_help_menu();
-            exit(0);
-        }
-    } else {
-        print_help_menu();
-        exit(0);
+        },
     }
 }
